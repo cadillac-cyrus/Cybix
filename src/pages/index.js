@@ -7,7 +7,7 @@ import Navbar from "@/Components/Navbar";
 // import { useEffect } from "react";
 
 export default function Home() {
-  const [apiKey, setApiKey] = useState("");
+  // const [apiKey, setApiKey] = useState("");
   const [userMessage, setUserMessage] = useState("");
   const [messages, setMessages] = useState([
     {
