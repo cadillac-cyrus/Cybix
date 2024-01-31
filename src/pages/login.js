@@ -3,39 +3,58 @@ import Navbar from "@/Components/Navbar";
 import Link from "next/link";
 import { useState } from "react"
 import { useSupabaseClient } from "@supabase/auth-helpers-react";
+import toast, { Toaster } from "react-hot-toast";
+import { useRouter } from "next/router";
 
 export default function Login() {
     const [email, setEmail] = useState("");
     const [code, setCode] = useState("");
+
+    const router = useRouter();
 
     const supabase = useSupabaseClient();
 
     async function sendCode() {
         console.log("email entered:", email);
         const { data, error } = await supabase.auth.signInWithOtp({
-            email: 'example@email.com',
-            // options: {
-            //   emailRedirectTo: 'https://example.com/welcome'
-            // }
+            email: email,
         });
 
-        if (data) {
-            console.log('verification code sent');
-        }
+        
         if (error) {
+            toast.error("Failed to send verification code")
             console.error("Failed to send verification code", error);
+            return;
+        }
+        if (data) {
+            toast.success("Verification Code sent, Check your email!")
+            console.log('verification code sent');
         }
     }
 
     async function submitCode() {
 
-        const { data, error } = await supabase.auth.verifyOtp({ email, token: code, type: 'magiclink' });
+        const { data, error } = await supabase.auth.verifyOtp({ email: email, token: code, type: 'magiclink' });
 
-        if (data) {
-            console.log("Signed in Succesfully", data)
+        if (data?.user) {
+            toast.success("Signed in successfully!");
+            console.log("Signed in Succesfully", data);
+            router.push('/')
         }
         if (error) {
-            console.error("Failed to sign in", error)
+            console.error("Failed to sign in", error);
+
+            const { data: d2, error: e2 } = await supabase.auth.verifyOtp({ email: email, token: code, type: 'signup' });
+
+            if (d2.user) {
+                toast.success("Signed up successfully")
+                console.log('Signed up successfully', d2)
+                router.push('/')
+            }
+            if (e2) {
+                toast.error("Failed to sign in / sign up")
+                console.error("sign up failed", e2)
+            }
         }
     }
 
@@ -44,6 +63,7 @@ export default function Login() {
             <Head>
                 <title>Cybix</title>
             </Head>
+            <Toaster />
             <div className="flex flex-col h-screen">
                 {/* Navbar */}
                 <Navbar />

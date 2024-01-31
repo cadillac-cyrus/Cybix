@@ -2,12 +2,22 @@
 import { useState } from "react";
 import Head from "next/head";
 import ReactMarkdown from 'react-markdown'
-import { createParser } from "eventsource-parser";
+// import { createParser } from "eventsource-parser";
 import Navbar from "@/Components/Navbar";
+import { useUser } from "@supabase/auth-helpers-react";
+import { streamOpenAIResponse } from "@/utils/openai";
+import toast, { Toaster } from "react-hot-toast";
 // import { useEffect } from "react";
 
 export default function Home() {
-  // const [apiKey, setApiKey] = useState("");
+  // const handleKeyDown = (e) => {
+  //   if (e.key === "Enter" && !e.shiftkey) {
+  //     e.preventDefault();
+  //     sendRequest();
+  //   }
+  // }
+
+  const user = useUser();
   const [userMessage, setUserMessage] = useState("");
   const [messages, setMessages] = useState([
     {
@@ -17,10 +27,19 @@ export default function Home() {
     },
   ]);
 
-  
 
-  const API_URL = "https://api.openai.com/v1/chat/completions";
   const sendRequest = async () => {
+    if (!userMessage) {
+      alert("Please enter a message before you hit send");
+    }
+
+    if (!user) {  // comes from useUser();
+      alert("Please log in to send a message!");
+    }
+   
+    const oldUserMessage = userMessage;
+    const oldMessages = messages;
+
     const updatedMessages = [
       ...messages,
       {
@@ -33,11 +52,10 @@ export default function Home() {
     setUserMessage("");
 
     try {
-      const response = await fetch(API_URL, {
+      const response = await fetch("/api/chat", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          // Authorization: `Bearer ${apiKey}`,
         },
         body: JSON.stringify({
           model: "gpt-3.5-turbo",
@@ -46,44 +64,26 @@ export default function Home() {
         }),
       });
 
-      const reader = response.body.getReader();
-
-      let newMessage = "";
-      const parser = createParser((event) => {
-        if (event.type === "event") {
-          const data = event.data;
-          if (data === "[DONE]") {
-            return;
-          }
-          const json = JSON.parse(event.data);
-          const content = json.choices[0].delta.content;
-
-          if (!content) {
-            return;
-          }
-
-          newMessage += content;
-
-          const updatedMessages2 = [
-            ...updatedMessages,
-            { role: "assistant", content: newMessage },
-          ];
-
-          setMessages(updatedMessages2);
-        } else {
-          return "";
-        }
-      });
-
-      // eslint-disable-next-line
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        const text = new TextDecoder().decode(value);
-        parser.feed(text);
+      if (response.status !== 200) {
+        throw new Error(
+          `OpenAI API returned an error.`
+        );
       }
+
+      streamOpenAIResponse(response, (newMessage) => {
+        console.log("newMessage:", newMessage)
+        // const updatedMessages2 = [
+          // ...updatedMessages,
+          // { role: "assistant", 'content': newMessage },
+        // ];
+
+        // setMessages(updatedMessages2);
+      });
     } catch (error) {
-      console.error("error");
+      console.error("error", error);
+
+      setUserMessage(oldUserMessage);
+      setMessages(oldMessages);
       window.alert("Error:" + error.message);
     }
   };
@@ -94,6 +94,7 @@ export default function Home() {
       <Head>
         <title>Cybix</title>
       </Head>
+      <Toaster />
       <div className="flex flex-col h-screen">
         {/* Navbar */}
         <Navbar />
@@ -110,9 +111,9 @@ export default function Home() {
                   </div>
                   <div className="text-lg prose">
                     <ReactMarkdown>
-                    {msg.content}
+                      {msg.content}
                     </ReactMarkdown>
-                    </div>
+                  </div>
                 </div>
               ))}
           </div>
